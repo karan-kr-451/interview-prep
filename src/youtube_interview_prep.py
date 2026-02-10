@@ -12,8 +12,9 @@ import re
 from youtube_transcript_api import YouTubeTranscriptApi
 from anthropic import Anthropic
 from google import genai
-from langchain_ollama import Ollama, ChatOllama
 from google.genai import types
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage
 import json
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
@@ -52,26 +53,52 @@ class AnalysisResult:
 class YouTubeAnalyzer:
     """Main class for analyzing YouTube educational content"""
     
-    def _get_client(self, provider: str, api_key: str):
+    def _get_client(self, provider: str, api_key: Optional[str] = None, model: str = "llama3.2"):
         """Get the appropriate client based on provider"""
         if provider == "anthropic":
+            if not api_key:
+                raise ValueError("API key required for Anthropic")
             return Anthropic(api_key=api_key)
         elif provider == "google":
+            if not api_key:
+                raise ValueError("API key required for Google")
             return genai.Client(api_key=api_key)
-        elif provider == "local":
-            return local 
+        elif provider == "ollama":
+            # Ollama runs locally, no API key needed
+            # You can specify base_url if Ollama is running on a different host
+            base_url = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
+            return ChatOllama(model=model, base_url=base_url)
         else:
-            raise ValueError(f"Unsupported provider: {provider}")
+            raise ValueError(f"Unsupported provider: {provider}. Choose from: anthropic, google, ollama")
 
-    def __init__(self, api_key: Optional[str] = None, provider: str = "anthropic"):
-        """Initialize with API key and provider"""
-        self.provider = provider
-        self.api_key = api_key or os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    def __init__(self, api_key: Optional[str] = None, provider: str = "anthropic", model: Optional[str] = None):
+        """
+        Initialize with API key and provider
         
-        if not self.api_key:
-            raise ValueError("API key is required. Set ANTHROPIC_API_KEY or GOOGLE_API_KEY environment variable.")
+        Args:
+            api_key: API key for cloud providers (not needed for Ollama)
+            provider: One of 'anthropic', 'google', or 'ollama'
+            model: Model name (optional, will use defaults if not specified)
+        """
+        self.provider = provider
+        
+        # For Ollama, API key is not required
+        if provider == "ollama":
+            self.api_key = None
+            self.model = model or "llama3.2"  # Default Ollama model
+        else:
+            # For cloud providers, try to get API key
+            self.api_key = api_key or os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('GOOGLE_API_KEY')
             
-        self.client = self._get_client(provider, self.api_key)
+            if not self.api_key:
+                raise ValueError(
+                    f"API key is required for {provider}. "
+                    "Set ANTHROPIC_API_KEY or GOOGLE_API_KEY environment variable, "
+                    "or pass api_key parameter."
+                )
+            self.model = model
+            
+        self.client = self._get_client(provider, self.api_key, self.model if provider == "ollama" else "llama3.2")
     
     def extract_video_id(self, url: str) -> str:
         """Extract video ID from YouTube URL"""
@@ -105,15 +132,18 @@ class YouTubeAnalyzer:
         except Exception as e:
             raise Exception(f"Error fetching transcript: {str(e)}")
     
-    def analyze_content(self, transcript: str, video_title: str = "", model: Optional[str] = None, provider: str = "anthropic") -> AnalysisResult:
+    def analyze_content(self, transcript: str, video_title: str = "", model: Optional[str] = None, provider: Optional[str] = None) -> AnalysisResult:
         """Analyze transcript and generate interview prep content"""
+        
+        # Use instance provider if not specified
+        provider = provider or self.provider
         
         analysis_prompt = f"""You are an expert technical interviewer and career coach. Analyze this educational content from a YouTube video and create comprehensive interview preparation materials.
 
 Video Title: {video_title}
 
 Transcript:
-{transcript}  # Limiting to avoid token limits
+{transcript[:15000]}  # Limiting to avoid token limits
 
 Please analyze this content and provide:
 
@@ -161,22 +191,30 @@ Provide ONLY the JSON response, no additional text."""
 
         try:
             # Use the correct client for the requested provider
-            client = self.client
             if provider != self.provider:
-                client = self._get_client(provider, self.api_key)
+                client = self._get_client(provider, self.api_key, model or "llama3.2")
+            else:
+                client = self.client
 
             # Determine the model if not provided
             if not model:
-                model = "claude-3-5-sonnet-20240620" if provider == "anthropic" else "gemini-2.0-flash"
+                if provider == "anthropic":
+                    model = "claude-3-5-sonnet-20241022"
+                elif provider == "google":
+                    model = "gemini-2.0-flash-exp"
+                elif provider == "ollama":
+                    model = self.model or "llama3.2"
 
+            # Make API call based on provider
             if provider == "anthropic":
                 response = client.messages.create(
                     model=model,
                     max_tokens=4000,
                     messages=[
                         {"role": "user", "content": analysis_prompt}
-                ]
-            )
+                    ]
+                )
+                response_text = response.content[0].text
             
             elif provider == "google":
                 response = client.models.generate_content(
@@ -222,17 +260,19 @@ Provide ONLY the JSON response, no additional text."""
                         }
                     )
                 )
-            
-            # Extract JSON from response
-            if provider == "anthropic":
-                response_text = response.content[0].text
-            elif provider == "google":
                 response_text = response.text
+            
+            elif provider == "ollama":
+                # LangChain Ollama uses ChatOllama with invoke method
+                messages = [HumanMessage(content=analysis_prompt)]
+                response = client.invoke(messages)
+                response_text = response.content
+            
             else:
-                response_text = str(response)
+                raise ValueError(f"Unsupported provider: {provider}")
             
             # Try to parse JSON
-            # Sometimes Claude adds markdown code blocks, so we need to clean it
+            # Sometimes models add markdown code blocks, so we need to clean it
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
@@ -261,13 +301,20 @@ Provide ONLY the JSON response, no additional text."""
             return result
             
         except Exception as e:
-            raise Exception(f"Error analyzing content: {str(e)}")
+            raise Exception(f"Error analyzing content with {provider}: {str(e)}")
     
     def analyze_youtube_video(self, video_url: str, video_title: str = "", model: Optional[str] = None, provider: Optional[str] = None) -> AnalysisResult:
         """Complete workflow: Extract transcript and analyze"""
         provider = provider or self.provider
+        
+        # Set default models for each provider
         if not model:
-            model = "claude-3-5-sonnet-20240620" if provider == "anthropic" else "gemini-2.0-pro"
+            if provider == "anthropic":
+                model = "claude-3-5-sonnet-20241022"
+            elif provider == "google":
+                model = "gemini-2.0-flash-exp"
+            elif provider == "ollama":
+                model = self.model or "llama3.2"
             
         print(f"📺 Fetching transcript from: {video_url}")
         transcript = self.get_transcript(video_url)
