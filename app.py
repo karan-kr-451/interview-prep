@@ -4,7 +4,7 @@ Run with: streamlit run app.py
 """
 
 import streamlit as st
-from youtube_interview_prep import YouTubeAnalyzer, AnalysisResult
+from src.youtube_interview_prep import YouTubeAnalyzer, AnalysisResult
 import os
 
 
@@ -26,11 +26,24 @@ def main():
     # Sidebar for API key
     with st.sidebar:
         st.header("⚙️ Configuration")
-        api_key = st.text_input(
-            "Anthropic API Key",
-            type="password",
-            help="Get your API key from https://console.anthropic.com/"
+        provider = st.selectbox(
+            "Provider",
+            ["anthropic", "google"],
+            index=0,
+            help="Select the AI provider to use"
         )
+        if provider == "anthropic":
+            api_key = st.text_input(
+                "Anthropic API Key",
+                type="password",
+                help="Get your API key from https://console.anthropic.com/"
+            )
+        elif provider == "google":
+            api_key = st.text_input(
+                "Google API Key",
+                type="password",
+                help="Get your API key from https://aistudio.google.com/app/api-keys"
+            )
         
         if not api_key:
             api_key = os.environ.get('ANTHROPIC_API_KEY')
@@ -73,12 +86,12 @@ def main():
         
         try:
             with st.spinner("🎥 Fetching video transcript..."):
-                analyzer = YouTubeAnalyzer(api_key=api_key)
+                analyzer = YouTubeAnalyzer(api_key=api_key,)
                 transcript = analyzer.get_transcript(video_url)
                 st.success(f"✅ Transcript retrieved ({len(transcript)} characters)")
             
             with st.spinner("🤖 Analyzing content with AI... This may take 30-60 seconds..."):
-                result = analyzer.analyze_content(transcript, video_title)
+                result = analyzer.analyze_content(transcript, video_title, provider = provider )
             
             st.success("✅ Analysis complete!")
             
