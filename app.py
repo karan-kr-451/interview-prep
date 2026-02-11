@@ -9,6 +9,7 @@ import os
 import subprocess
 import json
 import tempfile
+from src.Utils.Utils import convert_to_pdf_advanced
 
 
 def get_ollama_models():
@@ -465,7 +466,7 @@ def main():
         with tab4:
             st.subheader("Export Interview Prep")
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 if st.button("📄 Download as Markdown", use_container_width=True):
@@ -494,6 +495,25 @@ def main():
                         data=json_content,
                         file_name="interview_prep.json",
                         mime="application/json",
+                        use_container_width=True
+                    )
+                
+            with col3:
+                if st.button("📄 Download as PDF", use_container_width=True):
+                    mode = st.selectbox(
+                        "Select PDF Template",
+                        ["study", "resume", "corporate"]
+                    )
+                    temp_dir = tempfile.gettempdir()
+                    pdf_path = os.path.join(temp_dir, "interview_prep.pdf")
+                    convert_to_pdf_advanced(md_content, pdf_path, mode=mode)
+                    with open(pdf_path, "rb") as f:
+                        pdf_content = f.read()
+                    st.download_button(
+                        label="💾 Save PDF File",
+                        data=pdf_content,
+                        file_name="interview_prep.pdf",
+                        mime="application/pdf",
                         use_container_width=True
                     )
 

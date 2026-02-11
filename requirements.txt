@@ -6,3 +6,4 @@ ollama>=0.6.1
 langchain-ollama>=1.0.1
 langchain-core>=1.2.9
 json-repair>=0.57.0
+weasyprint>=68.1
