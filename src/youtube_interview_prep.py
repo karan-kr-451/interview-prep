@@ -509,6 +509,15 @@ Provide ONLY the JSON response, no additional text."""
             
             use_cases = []
             for u in analysis_data.get('use_cases', []):
+                # Ensure required fields exist even if model missed them
+                if 'implementation' not in u:
+                    u['implementation'] = "Not provided"
+                if 'company' not in u:
+                    u['company'] = "Unknown"
+                if 'scenario' not in u:
+                    u['scenario'] = "Not provided"
+                if 'technology' not in u:
+                    u['technology'] = "Not provided"
                 filtered_u = {k: v for k, v in u.items() if k in use_case_fields}
                 use_cases.append(UseCase(**filtered_u))
             

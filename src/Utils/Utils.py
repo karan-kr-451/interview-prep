@@ -113,14 +113,15 @@ def convert_to_pdf_advanced(markdown_text, output_path, mode="study"):
         }}
 
         pre {{
-            background: #1e1e1e;
-            color: #f8f8f2;
+            background: #f6f8fa;
+            color: #24292e;
             padding: 12px;
             border-radius: 6px;
+            border: 1px solid #e1e4e8;
         }}
 
         code {{
-            background: #f4f4f4;
+            background: #f6f8fa;
             padding: 3px 6px;
         }}
 

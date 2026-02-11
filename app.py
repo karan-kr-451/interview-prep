@@ -466,26 +466,26 @@ def main():
         with tab4:
             st.subheader("Export Interview Prep")
             
+            # Generate markdown content once for reuse across export formats
+            temp_dir = tempfile.gettempdir()
+            md_path = os.path.join(temp_dir, "interview_prep.md")
+            analyzer.export_to_markdown(result, md_path)
+            with open(md_path, "r", encoding='utf-8') as f:
+                md_content = f.read()
+            
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                if st.button("📄 Download as Markdown", use_container_width=True):
-                    temp_dir = tempfile.gettempdir()
-                    md_path = os.path.join(temp_dir, "interview_prep.md")
-                    analyzer.export_to_markdown(result, md_path)
-                    with open(md_path, "r", encoding='utf-8') as f:
-                        md_content = f.read()
-                    st.download_button(
-                        label="💾 Save Markdown File",
-                        data=md_content,
-                        file_name="interview_prep.md",
-                        mime="text/markdown",
-                        use_container_width=True
-                    )
+                st.download_button(
+                    label="� Download as Markdown",
+                    data=md_content,
+                    file_name="interview_prep.md",
+                    mime="text/markdown",
+                    use_container_width=True
+                )
             
             with col2:
                 if st.button("📋 Download as JSON", use_container_width=True):
-                    temp_dir = tempfile.gettempdir()
                     json_path = os.path.join(temp_dir, "interview_prep.json")
                     analyzer.export_to_json(result, json_path)
                     with open(json_path, "r", encoding='utf-8') as f:
@@ -499,12 +499,11 @@ def main():
                     )
                 
             with col3:
+                mode = st.selectbox(
+                    "PDF Template",
+                    ["study", "resume", "corporate"]
+                )
                 if st.button("📄 Download as PDF", use_container_width=True):
-                    mode = st.selectbox(
-                        "Select PDF Template",
-                        ["study", "resume", "corporate"]
-                    )
-                    temp_dir = tempfile.gettempdir()
                     pdf_path = os.path.join(temp_dir, "interview_prep.pdf")
                     convert_to_pdf_advanced(md_content, pdf_path, mode=mode)
                     with open(pdf_path, "rb") as f:
