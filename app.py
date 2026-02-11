@@ -8,6 +8,7 @@ from youtube_interview_prep import YouTubeAnalyzer, AnalysisResult
 import os
 import subprocess
 import json
+import tempfile
 
 
 def get_ollama_models():
@@ -450,6 +451,9 @@ def main():
                     st.markdown(f"**Asked by:** {', '.join(q.companies)}")
                     st.markdown("**Sample Answer:**")
                     st.write(q.sample_answer)
+                    if q.implementation and q.implementation != "Not provided":
+                        st.markdown("**💻 Implementation:**")
+                        st.code(q.implementation, language="python")
         
         with tab3:
             for i, uc in enumerate(result.use_cases, 1):
@@ -465,8 +469,10 @@ def main():
             
             with col1:
                 if st.button("📄 Download as Markdown", use_container_width=True):
-                    analyzer.export_to_markdown(result, "/tmp/interview_prep.md")
-                    with open("/tmp/interview_prep.md", "r", encoding='utf-8') as f:
+                    temp_dir = tempfile.gettempdir()
+                    md_path = os.path.join(temp_dir, "interview_prep.md")
+                    analyzer.export_to_markdown(result, md_path)
+                    with open(md_path, "r", encoding='utf-8') as f:
                         md_content = f.read()
                     st.download_button(
                         label="💾 Save Markdown File",
@@ -478,8 +484,10 @@ def main():
             
             with col2:
                 if st.button("📋 Download as JSON", use_container_width=True):
-                    analyzer.export_to_json(result, "/tmp/interview_prep.json")
-                    with open("/tmp/interview_prep.json", "r", encoding='utf-8') as f:
+                    temp_dir = tempfile.gettempdir()
+                    json_path = os.path.join(temp_dir, "interview_prep.json")
+                    analyzer.export_to_json(result, json_path)
+                    with open(json_path, "r", encoding='utf-8') as f:
                         json_content = f.read()
                     st.download_button(
                         label="💾 Save JSON File",
